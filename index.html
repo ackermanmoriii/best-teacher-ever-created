@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini Tutor v15 | Chart Engine Restored</title>
+    <title>Gemini Tutor v16 | Math Fix & Interaction Tools</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -109,7 +109,6 @@
             display: inline-block !important; /* Forces the math to stay together */
             font-size: 1.1em;
             text-align: left;
-            /* Removed background color for cleaner academic look */
         }
 
         /* 3. Display Math (Block) - Improved scrolling and isolation */
@@ -126,10 +125,7 @@
             text-align: center;
         }
         
-        /* Ensure internal HTML of KaTeX respects LTR */
-        .katex-html {
-            direction: ltr;
-        }
+        .katex-html { direction: ltr; }
 
         /* Chart & Output */
         .exec-output {
@@ -179,6 +175,24 @@
         .run-code-btn:hover { background: #1d4ed8; }
         .run-code-btn:disabled { background: #334155; cursor: not-allowed; }
 
+        /* Control Buttons */
+        .msg-controls {
+            display: flex; gap: 0.5rem; margin-top: 1rem; padding-top: 1rem;
+            border-top: 1px solid rgba(255,255,255,0.05); justify-content: flex-end;
+        }
+        .control-btn {
+            display: flex; align-items: center; gap: 0.3rem;
+            background: rgba(255,255,255,0.05); color: #94a3b8;
+            padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.75rem;
+            transition: all 0.2s; cursor: pointer;
+        }
+        .control-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+        .copy-code-btn {
+            color: #94a3b8; cursor: pointer; transition: color 0.2s;
+        }
+        .copy-code-btn:hover { color: #fff; }
+
         /* Loading Indicator */
         .typing-dot { width: 6px; height: 6px; background: #38bdf8; border-radius: 50%; animation: typing 1.4s infinite ease-in-out both; }
         .typing-dot:nth-child(1) { animation-delay: -0.32s; }
@@ -212,8 +226,8 @@
                 <i data-lucide="graduation-cap" class="text-accent w-6 h-6"></i>
             </div>
             <div>
-                <h1 class="font-bold text-lg text-white">Gemini Tutor v15</h1>
-                <p class="text-xs text-slate-400">Fixed Chart Engine (v8 Logic)</p>
+                <h1 class="font-bold text-lg text-white">Gemini Tutor v16</h1>
+                <p class="text-xs text-slate-400">Fixed Math Rendering & New Tools</p>
             </div>
         </div>
         
@@ -235,8 +249,8 @@
                 <h2 class="text-3xl font-bold text-white font-persian">دستیار آموزشی هوشمند</h2>
                 <p class="text-slate-400 max-w-lg mx-auto font-persian leading-8">
                     فایل‌های خود را آپلود کنید.<br>
-                    من با استفاده از موتور بازسازی شده (v8) نمودارها را دقیق رسم می‌کنم<br>
-                    و محتوا را گام‌به‌گام به شما آموزش می‌دهم.
+                    مشکل نمایش فرمول‌ها حل شده و ابزارهای جدید اضافه شدند.<br>
+                    من محتوا را گام‌به‌گام به شما آموزش می‌دهم.
                 </p>
             </div>
         </div>
@@ -295,6 +309,14 @@
                     </div>
                 </div>
                 <div class="markdown-content text-lg"></div>
+                <div class="msg-controls">
+                    <button class="control-btn" onclick="copyMessageContent(this)">
+                        <i data-lucide="copy" class="w-3 h-3"></i> Copy Content
+                    </button>
+                    <button class="control-btn" onclick="regenerateLastMessage(this)">
+                        <i data-lucide="refresh-ccw" class="w-3 h-3"></i> Regenerate
+                    </button>
+                </div>
             </div>
         </div>
     </template>
@@ -324,6 +346,7 @@
         let activeFiles = [];
         let activeUrls = [];
         let bookmarks = [];
+        let lastUserPrompt = ''; // Store for regenerate
 
         // --- SYSTEM INSTRUCTION (v8 Base + Enhancements) ---
         const SYSTEM_INSTRUCTION = `
@@ -341,10 +364,10 @@ Role: Warm, fluent, eloquent, and mathematically precise.
 *** PEDAGOGY: GUIDED LEARNING ***
 1. **INTERNALIZE FIRST:** Understand then teach in your own words.
 2. **INCREMENTAL TEACHING:** Break topics into small, digestible chunks.
-3. **TONE:** Be simple, clear, and friendly.
+3. **TONE:** Be simple, clear, and friendly (Persian).
 
 *** VISUAL & FORMATTING RULES ***
-1. **Math:** LaTeX ($...$ or $$...$$) is mandatory.
+1. **Math:** LaTeX ($...$ or $$...$$) is mandatory. Do NOT put Math inside code blocks like \`$x$\`. Just use $x$.
 2. **Charts (Accuracy Protocol):**
    - **EXTRACT** title/topic.
    - **VALIDATE** against scientific laws (e.g., TU Max = MU 0). FORCE data to be perfect.
@@ -385,7 +408,51 @@ Role: Warm, fluent, eloquent, and mathematically precise.
         function removeUrl(index) { activeUrls.splice(index, 1); renderPreviews(); }
         function removeFile(index) { activeFiles.splice(index, 1); renderPreviews(); }
 
-        // --- RESTORED v8 CHART EXECUTION LOGIC (PROVEN STABLE) ---
+        // --- CHART & COPY LOGIC ---
+        function copyCodeToClipboard(code, btn) {
+            navigator.clipboard.writeText(decodeURIComponent(code)).then(() => {
+                const originalIcon = btn.innerHTML;
+                btn.innerHTML = '<i data-lucide="check" class="w-4 h-4 text-green-400"></i>';
+                lucide.createIcons();
+                setTimeout(() => {
+                    btn.innerHTML = originalIcon;
+                    lucide.createIcons();
+                }, 2000);
+            });
+        }
+
+        function copyMessageContent(btn) {
+            const msgBody = btn.closest('.glass').querySelector('.markdown-content').innerText;
+            navigator.clipboard.writeText(msgBody).then(() => {
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i data-lucide="check" class="w-3 h-3"></i> Copied!';
+                lucide.createIcons();
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    lucide.createIcons();
+                }, 2000);
+            });
+        }
+
+        function regenerateLastMessage(btn) {
+            if (!lastUserPrompt) return;
+            
+            // Remove last AI message from UI
+            const aiMsg = btn.closest('.animate-fade-in-up');
+            if(aiMsg) aiMsg.remove();
+            
+            // Remove last interactions from history (User + AI)
+            // chatHistory structure: [User, AI, User, AI]
+            // We want to remove the last AI response, and re-send the User prompt.
+            // Since sendMessage pushes User prompt again, we should pop the last User prompt too.
+            chatHistory.pop(); // Remove AI
+            chatHistory.pop(); // Remove User
+            
+            // Trigger send with last prompt
+            document.getElementById('userInput').value = lastUserPrompt;
+            sendMessage();
+        }
+
         async function runChartCode(code, outputDivId, btnId) {
             const outputDiv = document.getElementById(outputDivId);
             const btn = document.getElementById(btnId);
@@ -405,16 +472,12 @@ Role: Warm, fluent, eloquent, and mathematically precise.
                 chartContainer.appendChild(canvas);
                 const ctx = canvas.getContext('2d');
                 
-                // 1. Clean Code
                 const cleanCode = code.replace(/new\s+Chart\s*\(/g, '//').replace(/document\.getElementById/g, '//');
-                
-                // 2. Wrap & Eval (v8 Logic)
                 const wrappedCode = `(function(){ ${cleanCode}; return typeof config!=='undefined'?config:null; })()`;
                 const configObject = eval(wrappedCode);
 
                 if (!configObject) throw new Error("Config object not found. Ensure code defines 'const config = ...'");
                 
-                // 3. Render
                 new Chart(ctx, configObject);
                 
             } catch (err) {
@@ -513,19 +576,50 @@ Role: Warm, fluent, eloquent, and mathematically precise.
             }
         }
 
+        // --- SPECIAL MATH & CODE FIXES ---
+        function fixMathInCodeBlocks(container) {
+            // Find <code> blocks that contain LaTeX signatures (e.g., \, $, or common math keywords)
+            const codes = container.querySelectorAll('code');
+            codes.forEach(code => {
+                const text = code.innerText;
+                // Regex checks for:
+                // 1. Starts with backslash (e.g. \beta)
+                // 2. Starts/Ends with $ (e.g. $x$)
+                // 3. Contains typical latex symbols like { } and \
+                if (/^\\[a-zA-Z]+/.test(text) || /^\$.*\$$/.test(text) || (/\\/.test(text) && /\{/.test(text))) {
+                    // It's likely math that got trapped in a code block. Unwrap it.
+                    const span = document.createElement('span');
+                    span.innerHTML = text; // Keep text as is for KaTeX to process
+                    code.replaceWith(span);
+                }
+            });
+        }
+
         function appendAIMessage(rawMarkdown) {
             const tpl = document.getElementById('aiMsgTemplate');
             const clone = tpl.content.cloneNode(true);
             const contentDiv = clone.querySelector('.markdown-content');
 
             try {
+                // 1. Parse Markdown
                 contentDiv.innerHTML = marked.parse(rawMarkdown);
-                enableBookmarking(contentDiv);
+                
+                // 2. FIX: Unwrap math trapped in <code> tags
+                fixMathInCodeBlocks(contentDiv);
+                
+                // 3. Render Math
                 renderMathInElement(contentDiv, {
-                    delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}],
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false}
+                    ],
                     throwOnError: false
                 });
 
+                // 4. Enable Bookmarking
+                enableBookmarking(contentDiv);
+
+                // 5. Handle Charts
                 const terminals = contentDiv.querySelectorAll('.mac-terminal');
                 terminals.forEach(term => {
                     const lang = term.getAttribute('data-lang');
@@ -582,6 +676,7 @@ Role: Warm, fluent, eloquent, and mathematically precise.
 
             document.getElementById('emptyState').style.display = 'none';
             userInput.value = '';
+            lastUserPrompt = text; // Save for regenerate
             
             appendUserMessage(text);
             
@@ -674,14 +769,21 @@ Role: Warm, fluent, eloquent, and mathematically precise.
         if (apiKey) document.getElementById('apiKeyInput').value = apiKey;
         lucide.createIcons();
 
+        // Updated Marked Renderer with Copy Code Button
         marked.use({
             renderer: {
                 code(code, language) {
                     const validLang = language || 'plaintext';
-                    return `<div class="mac-terminal" data-code="${encodeURIComponent(code)}" data-lang="${validLang}">
+                    const encodedCode = encodeURIComponent(code);
+                    return `<div class="mac-terminal" data-code="${encodedCode}" data-lang="${validLang}">
                                 <div class="mac-header">
                                     <div class="flex gap-2"><div class="w-3 h-3 rounded-full bg-red-500"></div><div class="w-3 h-3 rounded-full bg-yellow-500"></div><div class="w-3 h-3 rounded-full bg-green-500"></div></div>
-                                    <span class="text-xs text-slate-400 font-mono">${validLang}</span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs text-slate-400 font-mono">${validLang}</span>
+                                        <button class="copy-code-btn" onclick="copyCodeToClipboard('${encodedCode}', this)" title="Copy Code">
+                                            <i data-lucide="clipboard" class="w-3 h-3"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <pre><code class="hljs language-${validLang}">${code}</code></pre>
                             </div>`;
