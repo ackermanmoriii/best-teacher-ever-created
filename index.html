@@ -85,10 +85,18 @@
         .markdown-content p, .markdown-content li { position: relative; padding-left: 24px; margin-bottom: 1.5rem; }
         .markdown-content ul, .markdown-content ol { padding-right: 1.5rem; margin-bottom: 1rem; list-style-position: inside; }
         
-        /* === FIXED MATH & CODE STYLING === */
+        /* === FIXED MATH & CODE STYLING (FIX APPLIED HERE) === */
+        
+        /* New helper class for LTR elements inside RTL text, crucial for inline math punctuation */
+        .ltr-isolated {
+            direction: ltr !important;
+            unicode-bidi: isolate !important;
+            display: inline-block;
+        }
         
         /* 1. Inline Code Styles */
         .markdown-content code:not(pre code) {
+            /* Applied existing math fixes for code here to keep them safe */
             direction: ltr; 
             unicode-bidi: isolate;
             font-family: 'JetBrains Mono', monospace;
@@ -104,6 +112,7 @@
 
         /* 2. Inline Math (KaTeX) - Cleaned up to fix scrambling */
         .katex {
+            /* Enforced LTR on the core KaTeX span */
             direction: ltr !important; 
             unicode-bidi: isolate !important;
             display: inline-block !important; /* Forces the math to stay together */
@@ -113,6 +122,7 @@
 
         /* 3. Display Math (Block) - Improved scrolling and isolation */
         .katex-display {
+            /* Enforced LTR on the block container */
             direction: ltr !important; 
             unicode-bidi: isolate !important;
             overflow-x: auto; 
@@ -125,6 +135,7 @@
             text-align: center;
         }
         
+        /* Kept the final KaTeX HTML element LTR */
         .katex-html { direction: ltr; }
 
         /* Chart & Output */
@@ -594,6 +605,27 @@ Role: Warm, fluent, eloquent, and mathematically precise.
                 }
             });
         }
+        
+        // ** FIX for RTL/LTR Punctuation Crash **
+        function wrapInlineMath(container) {
+            // Select all inline KaTeX spans (which have the class 'katex')
+            const inlineMaths = container.querySelectorAll('.katex:not(.katex-display .katex)');
+            
+            inlineMaths.forEach(katexSpan => {
+                // Check if it's already wrapped by the fix (to prevent double wrapping)
+                if (katexSpan.parentElement.classList.contains('ltr-isolated')) {
+                    return;
+                }
+                
+                // Create the wrapper span
+                const wrapper = document.createElement('span');
+                wrapper.classList.add('ltr-isolated'); // The new helper class
+                
+                // Move the katex span inside the wrapper
+                katexSpan.parentNode.insertBefore(wrapper, katexSpan);
+                wrapper.appendChild(katexSpan);
+            });
+        }
 
         function appendAIMessage(rawMarkdown) {
             const tpl = document.getElementById('aiMsgTemplate');
@@ -615,6 +647,9 @@ Role: Warm, fluent, eloquent, and mathematically precise.
                     ],
                     throwOnError: false
                 });
+
+                // 3b. **FIX Application:** Wrap inline math for RTL isolation
+                wrapInlineMath(contentDiv);
 
                 // 4. Enable Bookmarking
                 enableBookmarking(contentDiv);
